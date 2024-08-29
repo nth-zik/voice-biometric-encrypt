@@ -15,6 +15,8 @@ from models.RawNetBasicBlock import Bottle2neck
 from utils import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 
 import torch.nn as nn
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
 
 print("torch.cuda.is_available()", torch.cuda.is_available())
 
@@ -58,6 +60,46 @@ def main():
         gpu=gpu,
     )
 
+    DECIMAL_KEEP = 10**8
+
+    # Mã hóa và lưu tạm xuống file (xem như db)
+    embedding_np = embedding.numpy()
+    # save raw embedding to file
+    with open("embeddingraw.txt", "w") as f:
+        f.write(str(embedding_np.tolist()))
+    signs = np.sign(embedding_np)  # Lưu trữ dấu (-1 hoặc 1)
+    original_shape = embedding_np.shape
+    abs_embedding = np.abs(embedding_np)  # Lấy giá trị tuyệt đối
+    # chuyển sang số nguyên và giữ 10 chữ số thập phân
+    integer_representation = (abs_embedding * DECIMAL_KEEP).astype(int)
+    ravel_length = len(integer_representation.ravel())
+
+    # Chuyển mỗi giá trị float sang nhị phân
+    binary_representation = "".join(
+        format(x, "064b") for x in integer_representation.ravel()
+    )
+
+    # Mã hóa chuỗi nhị phân với AES
+
+    # Chuyển đổi từng phần sang số nguyên và mã hóa bằng AES
+    key = b"lEI9KdGi2j!48XSi"
+    cipher = AES.new(key, AES.MODE_CBC)
+    ciphertext = b""
+
+    binary_data = int(binary_representation, 2).to_bytes(
+        (len(binary_representation) + 7) // 8, byteorder="big"
+    )
+    ciphertext += cipher.encrypt(pad(binary_data, AES.block_size))
+
+    # Lưu IV (Initialization Vector) và ciphertext xuống file
+    iv = cipher.iv
+    with open("encrypted_voice_data.bin", "wb") as f:
+        f.write(np.array(original_shape, dtype=np.int32).tobytes())
+        f.write(np.array(ravel_length, dtype=np.int32).tobytes())
+        f.write(signs.tobytes())
+        f.write(iv)
+        f.write(ciphertext)
+
     embedding2 = extract_speaker_embd(
         model,
         # fn='test_data/ts1_eSKwFJL.000000000.wav',
@@ -66,11 +108,60 @@ def main():
         n_segments=n_segments,
         gpu=gpu,
     )
+    # giải mã và so sánh
+
+    with open("encrypted_voice_data.bin", "rb") as f:
+        stored_original_shape = tuple(np.frombuffer(f.read(8), dtype=np.int32))
+        stored_ravel_length = int(np.frombuffer(f.read(4), dtype=np.int32))
+        stored_signs = np.frombuffer(
+            f.read(embedding_np.size * signs.itemsize), dtype=signs.dtype
+        )  # Đọc dấu từ tệp
+        stored_iv = f.read(16)  # Đọc IV (16 byte tiếp theo)
+        stored_ciphertext = f.read()  # Đọc phần còn lại là ciphertext
+
+    # Giải mã dữ liệu
+    cipher = AES.new(key, AES.MODE_CBC, iv=stored_iv)
+    decrypted_data = unpad(cipher.decrypt(stored_ciphertext), AES.block_size)
+    # Chuyển chuỗi nhị phân giải mã về dạng số nguyên
+    binary_string = bin(int.from_bytes(decrypted_data, byteorder="big"))[2:].zfill(
+        stored_ravel_length * 64
+    )
+    original_integer_representation = np.array(
+        [int(binary_string[i : i + 64], 2) for i in range(0, len(binary_string), 64)]
+    )
+
+    # Chuyển đổi số nguyên về lại float
+
+    original_abs_embedding_np = (
+        original_integer_representation.astype(float) / DECIMAL_KEEP
+    )
+    original_abs_embedding_np = original_abs_embedding_np.reshape(stored_original_shape)
+    # Áp dụng dấu đã lưu để khôi phục giá trị gốc
+    original_embedding_np = original_abs_embedding_np * stored_signs.reshape(
+        original_abs_embedding_np.shape
+    )
+    # So sánh gốc
+    print("Original embedding")
     cos = nn.CosineSimilarity(dim=0, eps=1e-6)
+    first_outputs = []
     for i in range(0, n_segments):
         output = cos(embedding[i], embedding2[i])
-        output = float(output)
-        print(output)
+        first_outputs.append(float(output))
+    print(first_outputs)
+
+    print("encrypt embedding")
+    second_outputs = []
+    cos = nn.CosineSimilarity(dim=0, eps=1e-6)
+    for i in range(0, n_segments):
+        original_embedding_tensor = torch.tensor(
+            original_embedding_np[i], dtype=torch.float32
+        )
+        output = cos(original_embedding_tensor, embedding2[i])
+        second_outputs.append(float(output))
+    print(second_outputs)
+    print(np.array(second_outputs) / np.array(first_outputs))
+    with open("embeddingraw_afteraes.txt", "w") as f:
+        f.write(str(original_embedding_np.tolist()))
 
 
 def extract_speaker_embd(
