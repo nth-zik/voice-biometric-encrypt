@@ -26,3 +26,6 @@ torchvision
 tqdm==4.66.5
 typing_extensions==4.12.2
 pycryptodome==3.20.0
+simhash
+lshashpy3
+ssdeep

@@ -2,6 +2,8 @@ import argparse
 import itertools
 import os
 import sys
+import hashlib
+import struct
 from typing import Dict
 
 import numpy as np
@@ -19,6 +21,33 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 
 print("torch.cuda.is_available()", torch.cuda.is_available())
+
+
+def float_to_bin(value):
+    """Chuyển đổi float sang chuỗi nhị phân theo chuẩn IEEE 754."""
+    [d] = struct.unpack(">Q", struct.pack(">d", value))
+    return f"{d:064b}"
+
+
+def embedding_to_binary(embedding_np):
+    """Chuyển đổi toàn bộ embedding thành chuỗi nhị phân."""
+    return "".join(float_to_bin(x) for x in embedding_np.ravel())
+
+
+def hash_binary(binary_string):
+    """Tạo giá trị băm SHA-256 từ chuỗi nhị phân."""
+    binary_bytes = int(binary_string, 2).to_bytes(
+        (len(binary_string) + 7) // 8, byteorder="big"
+    )
+    sha256_hash = hashlib.sha256(binary_bytes).hexdigest()
+    return sha256_hash
+
+
+def hamming_distance(hash1, hash2):
+    """Tính khoảng cách Hamming giữa hai giá trị băm"""
+    bin1 = bin(int(hash1, 16))[2:].zfill(256)
+    bin2 = bin(int(hash2, 16))[2:].zfill(256)
+    return sum(c1 != c2 for c1, c2 in zip(bin1, bin2))
 
 
 def main():
@@ -67,6 +96,7 @@ def main():
     # save raw embedding to file
     with open("embeddingraw.txt", "w") as f:
         f.write(str(embedding_np.tolist()))
+
     signs = np.sign(embedding_np)  # Lưu trữ dấu (-1 hoặc 1)
     original_shape = embedding_np.shape
     abs_embedding = np.abs(embedding_np)  # Lấy giá trị tuyệt đối
