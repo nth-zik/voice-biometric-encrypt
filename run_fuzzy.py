@@ -56,7 +56,7 @@ def main():
     #     model = model.to("cuda")
     #     gpu = True
 
-    embedding = extract_speaker_embd(
+    embedding1 = extract_speaker_embd(
         model,
         fn="test_data/id01_1.wav",
         n_samples=n_samples,
@@ -64,16 +64,7 @@ def main():
         gpu=gpu,
     ).numpy()
 
-    embedding1_avg = np.mean(embedding, axis=0)
-    print(embedding1_avg.shape)
-    print(embedding.flatten().shape)
-    print(embedding.shape[1])
-    dim = embedding.flatten().shape[0]  # Số chiều của vector đặc trưng (embedding)
-    num_hash_bits = 64  # Số lượng bits trong hàm băm LSH, bạn có thể điều chỉnh
-    lsh = LSHash(num_hash_bits, dim)
-    # print(embedding.flatten())
-    lsh.index(embedding.flatten(), extra_data="audio1")
-    # lsh.index(embedding1_avg, extra_data="audio1")
+    hash1 = fuzzy_hash_vector(embedding1)
 
     print("SimHash has been saved to simhash1.txt")
 
@@ -86,11 +77,15 @@ def main():
         gpu=gpu,
     ).numpy()
 
-    embedding2_avg = np.mean(embedding2, axis=0)
+    hash2 = fuzzy_hash_vector(embedding2)
 
-    results = lsh.query(embedding2.flatten(), num_results=1, distance_func="euclidean")
-    # results = lsh.query(embedding2_avg, num_results=1, distance_func="euclidean")
-    print("results", results)
+    similarity_score = compare_fuzzy_hashes(hash1, hash2)
+
+    # In ra các giá trị băm và điểm số tương đồng
+    print(f"Fuzzy hash 1: {hash1}")
+    print(f"Fuzzy hash 2: {hash2}")
+    print(f"Similarity score between two fuzzy hashes: {similarity_score}")
+
     # So sánh gốc
     print("Original embedding")
     cos = nn.CosineSimilarity(dim=0, eps=1e-6)
