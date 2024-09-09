@@ -1,16 +1,37 @@
-import ssdeep
+import argparse
+import itertools
+import os
+import sys
+import hashlib
+import struct
+from typing import Dict
 
 import numpy as np
 import soundfile as sf
 import torch
-import struct
+import torch.nn.functional as F
+from tqdm import tqdm
+
 from models.RawNet3 import RawNet3
 from models.RawNetBasicBlock import Bottle2neck
+from utils import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 
 import torch.nn as nn
-from lshashpy3 import LSHash
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+from simhash import Simhash
 
 print("torch.cuda.is_available()", torch.cuda.is_available())
+
+
+def sha256_hash_hex(hex_string):
+    """Băm chuỗi hexadecimal bằng SHA-256"""
+    return hashlib.sha256(hex_string.encode("utf-8")).hexdigest()
+
+
+def hamming_distance(bin_str1, bin_str2):
+    """Tính khoảng cách Hamming giữa hai chuỗi nhị phân"""
+    return sum(c1 != c2 for c1, c2 in zip(bin_str1, bin_str2))
 
 
 def float_to_binary_with_sign(value):
@@ -26,7 +47,7 @@ def float_to_binary_with_sign(value):
         struct.unpack("!Q", struct.pack("!d", value))[0], "064b"
     )
     # Thêm bit dấu vào trước
-    return sign_bit + binary_representation
+    return binary_representation
 
 
 def vector_to_binary_hex(vector):
@@ -38,18 +59,7 @@ def vector_to_binary_hex(vector):
 
     # Chuyển đổi từ binary sang hexadecimal
     hex_representation = hex(int(binary_representation, 2))[2:]  # Bỏ '0x' của hex
-    return binary_representation
-
-
-def fuzzy_hash_vector(hex_string):
-    """Sử dụng fuzzy hashing với SSDEEP để băm vector đặc trưng"""
-    fuzzy_hash = ssdeep.hash(hex_string)
-    return fuzzy_hash
-
-
-def compare_fuzzy_hashes(hash1, hash2):
-    """So sánh hai giá trị băm fuzzy hash"""
-    return ssdeep.compare(hash1, hash2)
+    return hex_representation
 
 
 def main():
@@ -83,7 +93,7 @@ def main():
     #     model = model.to("cuda")
     #     gpu = True
 
-    embedding1 = extract_speaker_embd(
+    embedding = extract_speaker_embd(
         model,
         fn="test_data/id01_1.wav",
         n_samples=n_samples,
@@ -91,37 +101,39 @@ def main():
         gpu=gpu,
     )
 
-    hex_embed1 = embedding1.numpy().tobytes()
-    hash1 = fuzzy_hash_vector(hex_embed1)
-
-    print("SimHash has been saved to simhash1.txt")
+    # Mã hóa và lưu tạm xuống file (xem như db)
+    # simhash1 = vector_to_binary_hex(binary_representation1)
+    hash1 = sha256_hash_hex(vector_to_binary_hex(embedding.numpy()))
 
     embedding2 = extract_speaker_embd(
         model,
         # fn='test_data/ts1_eSKwFJL.000000000.wav',
+        # fn="test_data/00004_old.wav",
         fn="test_data/id01_2.wav",
         n_samples=n_samples,
         n_segments=n_segments,
         gpu=gpu,
     )
+    hash2 = sha256_hash_hex(vector_to_binary_hex(embedding2.numpy()))
 
-    hash2 = fuzzy_hash_vector(embedding2.numpy().tobytes())
-
-    similarity_score = compare_fuzzy_hashes(hash1, hash2)
-
-    # In ra các giá trị băm và điểm số tương đồng
-    print(f"Fuzzy hash 1: {hash1}")
-    print(f"Fuzzy hash 2: {hash2}")
-    print(f"Similarity score between two fuzzy hashes: {similarity_score}")
-
+    hamming_dist = hamming_distance(hash1, hash2)
+    print(f"len hash {len(hash1)}")
+    print(f"hash1 {hash1}")
+    print(f"hash2 {hash2}")
+    print(f"Hamming Distance {hamming_dist} {hamming_dist/len(hash1)}")
+    with open("embeddingraw1", "w") as f:
+        f.write(str(embedding.numpy().tolist()))
+    with open("embeddingraw2", "w") as f:
+        f.write(str(embedding2.numpy().tolist()))
     # So sánh gốc
     print("Original embedding")
     cos = nn.CosineSimilarity(dim=0, eps=1e-6)
     first_outputs = []
-    for i in range(0, n_segments):
-        output = cos(embedding1[i], embedding2[i])
-        first_outputs.append(float(output))
-    print(first_outputs)
+    # for i in range(0, n_segments):
+    #     output = cos(embedding[i], embedding2[i])
+    #     first_outputs.append(float(output))
+    # print(first_outputs)
+    print(float(cos(embedding[0], embedding2[0])))
 
     # print("encrypt embedding")
     # second_outputs = []
@@ -152,16 +164,17 @@ def extract_speaker_embd(
             f"RawNet3 supports 16k sampling rate only. Input data's sampling rate is {sample_rate}."
         )
 
-    if len(audio) < n_samples:  # RawNet3 was trained using utterances of 3 seconds
-        shortage = n_samples - len(audio) + 1
-        audio = np.pad(audio, (0, shortage), "wrap")
+    # if len(audio) < n_samples:  # RawNet3 was trained using utterances of 3 seconds
+    #     shortage = n_samples - len(audio) + 1
+    #     audio = np.pad(audio, (0, shortage), "wrap")
 
-    audios = []
-    startframe = np.linspace(0, len(audio) - n_samples, num=n_segments)
-    for asf in startframe:
-        audios.append(audio[int(asf) : int(asf) + n_samples])
+    # audios = []
+    # startframe = np.linspace(0, len(audio) - n_samples, num=n_segments)
+    # for asf in startframe:
+    #     audios.append(audio[int(asf) : int(asf) + n_samples])
 
-    audios = torch.from_numpy(np.stack(audios, axis=0).astype(np.float32))
+    # audios = torch.from_numpy(np.stack(audios, axis=0).astype(np.float32))
+    audios = torch.from_numpy(audio.astype(np.float32)).unsqueeze(0)
     if gpu:
         audios = audios.to("cuda")
     with torch.no_grad():

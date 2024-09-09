@@ -68,6 +68,34 @@ def embedding_to_simhash(embedding_np):
     return Simhash(features)
 
 
+def float_to_binary_with_sign(value):
+    """Chuyển số float sang chuỗi binary, thêm bit lưu dấu"""
+    # Chuyển giá trị float thành chuỗi nhị phân
+    if value >= 0:
+        sign_bit = "0"  # Thêm 0 nếu số dương
+    else:
+        sign_bit = "1"  # Thêm 1 nếu số âm
+        value = -value  # Lấy giá trị tuyệt đối cho phần nhị phân
+    # Chuyển đổi phần giá trị tuyệt đối thành 64-bit nhị phân
+    binary_representation = format(
+        struct.unpack("!Q", struct.pack("!d", value))[0], "064b"
+    )
+    # Thêm bit dấu vào trước
+    return sign_bit + binary_representation
+
+
+def vector_to_binary_hex(vector):
+    """Chuyển vector đặc trưng sang binary rồi chuyển sang hexadecimal"""
+    # Chuyển đổi vector thành binary
+    binary_representation = "".join(
+        float_to_binary_with_sign(x) for x in vector.ravel()
+    )
+
+    # Chuyển đổi từ binary sang hexadecimal
+    hex_representation = hex(int(binary_representation, 2))[2:]  # Bỏ '0x' của hex
+    return hex_representation
+
+
 def main():
     n_segments = 10
     n_samples = 16000
@@ -108,7 +136,7 @@ def main():
     )
 
     # Mã hóa và lưu tạm xuống file (xem như db)
-    # binary_representation1 = embedding_to_binary(embedding)
+    # binary_representation1 = vector_to_binary_hex(embedding)
     # simhash1 = binary_to_simhash(binary_representation1)
     simhash1 = embedding_to_simhash(embedding.numpy())
     save_simhash_to_file(simhash1, "simhash1.txt")
@@ -121,19 +149,21 @@ def main():
     embedding2 = extract_speaker_embd(
         model,
         # fn='test_data/ts1_eSKwFJL.000000000.wav',
-        fn="test_data/id01_2.wav",
+        # fn="test_data/id01_2.wav",
+        fn="test_data/00004_old.wav",
         n_samples=n_samples,
         n_segments=n_segments,
         gpu=gpu,
     )
     # giải mã và so sánh
-    # binary_representation2 = embedding_to_binary(embedding2)
+    # binary_representation2 = vector_to_binary_hex(embedding2)
     # simhash2 = binary_to_simhash(binary_representation2)
     simhash2 = embedding_to_simhash(embedding2.numpy())
 
     hamming_dist = loaded_simhash.distance(simhash2)
     print(simhash1.value)
     print(simhash2.value)
+    # print(f"Total len {simhash1.batch_size}")
     print(f"Hamming Distance Raw {simhash1.distance(simhash2)}")
     print(f"Hamming Distance from file {hamming_dist}")
     with open("embeddingraw1", "w") as f:

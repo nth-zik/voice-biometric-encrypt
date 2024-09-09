@@ -50,6 +50,34 @@ def hamming_distance(hash1, hash2):
     return sum(c1 != c2 for c1, c2 in zip(bin1, bin2))
 
 
+def float_to_binary_with_sign(value):
+    """Chuyển số float sang chuỗi binary, thêm bit lưu dấu"""
+    # Chuyển giá trị float thành chuỗi nhị phân
+    if value >= 0:
+        sign_bit = "0"  # Thêm 0 nếu số dương
+    else:
+        sign_bit = "1"  # Thêm 1 nếu số âm
+        value = -value  # Lấy giá trị tuyệt đối cho phần nhị phân
+    # Chuyển đổi phần giá trị tuyệt đối thành 64-bit nhị phân
+    binary_representation = format(
+        struct.unpack("!Q", struct.pack("!d", value))[0], "064b"
+    )
+    # Thêm bit dấu vào trước
+    return sign_bit + binary_representation
+
+
+def vector_to_binary_hex(vector):
+    """Chuyển vector đặc trưng sang binary rồi chuyển sang hexadecimal"""
+    # Chuyển đổi vector thành binary
+    binary_representation = "".join(
+        float_to_binary_with_sign(x) for x in vector.ravel()
+    )
+
+    # Chuyển đổi từ binary sang hexadecimal
+    hex_representation = hex(int(binary_representation, 2))[2:]  # Bỏ '0x' của hex
+    return hex_representation
+
+
 def main():
     n_segments = 5
     n_samples = 16000
