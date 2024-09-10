@@ -85,7 +85,7 @@ def main():
 
     embedding2_avg = np.mean(embedding2, axis=0)
 
-    results = lsh.query(embedding2.flatten(), num_results=1, distance_func="euclidean")
+    results = lsh.query(embedding2.flatten(), num_results=1, distance_func="hamming")
     # results = lsh.query(embedding2_avg, num_results=1, distance_func="euclidean")
     print("results", results)
     # So sánh gốc

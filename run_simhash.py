@@ -136,9 +136,9 @@ def main():
     )
 
     # Mã hóa và lưu tạm xuống file (xem như db)
-    # binary_representation1 = vector_to_binary_hex(embedding)
-    # simhash1 = binary_to_simhash(binary_representation1)
-    simhash1 = embedding_to_simhash(embedding.numpy())
+    binary_representation1 = vector_to_binary_hex(embedding)
+    simhash1 = binary_to_simhash(binary_representation1)
+    # simhash1 = embedding_to_simhash(embedding.numpy())
     save_simhash_to_file(simhash1, "simhash1.txt")
     print("SimHash has been saved to simhash1.txt")
 
@@ -156,9 +156,9 @@ def main():
         gpu=gpu,
     )
     # giải mã và so sánh
-    # binary_representation2 = vector_to_binary_hex(embedding2)
-    # simhash2 = binary_to_simhash(binary_representation2)
-    simhash2 = embedding_to_simhash(embedding2.numpy())
+    binary_representation2 = vector_to_binary_hex(embedding2)
+    simhash2 = binary_to_simhash(binary_representation2)
+    # simhash2 = embedding_to_simhash(embedding2.numpy())
 
     hamming_dist = loaded_simhash.distance(simhash2)
     print(simhash1.value)

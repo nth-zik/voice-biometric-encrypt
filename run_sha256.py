@@ -56,9 +56,12 @@ def vector_to_binary_hex(vector):
     binary_representation = "".join(
         float_to_binary_with_sign(x) for x in vector.ravel()
     )
-
+    import sys
+    sys.set_int_max_str_digits(0)
+    print(f'int(binary_representation, 2) {int(binary_representation, 2)}')
     # Chuyển đổi từ binary sang hexadecimal
     hex_representation = hex(int(binary_representation, 2))[2:]  # Bỏ '0x' của hex
+    print(hex_representation)
     return hex_representation
 
 
