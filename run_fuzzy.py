@@ -10,7 +10,7 @@ from models.RawNetBasicBlock import Bottle2neck
 import torch.nn as nn
 from lshashpy3 import LSHash
 
-print("torch.cuda.is_available()", torch.cuda.is_available())
+# print("torch.cuda.is_available()", torch.cuda.is_available())
 
 
 def float_to_binary_with_sign(value):
