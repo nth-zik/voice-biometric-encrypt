@@ -7,25 +7,55 @@ from models.RawNet3 import RawNet3
 from models.RawNetBasicBlock import Bottle2neck
 
 
-def biohashing(embedding, random_matrix):
+def quantize_embedding(embedding_np, num_bits=16):
     """
-    Áp dụng BioHashing lên vector đặc trưng.
+    Lượng tử hóa embedding thành biểu diễn nhị phân với số bit xác định.
 
     Args:
-        embedding (np.ndarray): Vector đặc trưng.
+        embedding_np (np.ndarray): Vector đặc trưng.
+        num_bits (int): Số bit để lượng tử hóa mỗi giá trị (tối đa 8).
+
+    Returns:
+        np.ndarray: Mảng nhị phân sau khi lượng tử hóa.
+    """
+    if num_bits > 32:
+        raise ValueError("num_bits phải nhỏ hơn hoặc bằng 32.")
+
+    # Chuẩn hóa embedding về khoảng [0, 1]
+    min_val = embedding_np.min()
+    max_val = embedding_np.max()
+    embedding_norm = (embedding_np - min_val) / (max_val - min_val)
+
+    # Lượng tử hóa thành số mức 2^num_bits
+    quantized = np.floor(embedding_norm * (2**num_bits - 1)).astype(np.uint8)
+
+    # Chuyển đổi thành mảng nhị phân
+    binary_array = np.unpackbits(quantized[:, :, np.newaxis], axis=2, bitorder="big")[
+        :, :, -num_bits:
+    ]
+    binary_array = binary_array.reshape(-1)
+
+    return binary_array
+
+
+def biohashing(binary_array, random_matrix):
+    """
+    Áp dụng BioHashing lên mảng nhị phân.
+
+    Args:
+        binary_array (np.ndarray): Mảng nhị phân.
         random_matrix (np.ndarray): Ma trận ngẫu nhiên (khóa).
 
     Returns:
         np.ndarray: Mã băm sinh trắc học.
     """
-    # Nhân embedding với random_matrix
-    transformed = np.dot(embedding, random_matrix)
-    # Áp dụng hàm dấu để lượng tử hóa
-    biohash = np.sign(transformed)
-    # Chuyển từ -1, 0, 1 thành 0, 1
-    biohash[biohash >= 0] = 1
-    biohash[biohash < 0] = 0
-    return biohash.astype(int)
+    # Chuyển đổi binary_array thành vector số thực (-1 và 1)
+    binary_vector = binary_array * 2 - 1  # Chuyển 0 thành -1, 1 giữ nguyên
+    # Áp dụng BioHashing với ma trận ngẫu nhiên nhỏ hơn
+    transformed = np.dot(binary_vector, random_matrix)
+    # Lượng tử hóa kết quả
+    biohash = (transformed > 0).astype(int)
+    return biohash
 
 
 def main():
@@ -53,12 +83,13 @@ def main():
         )["model"]
     )
     model.eval()
-    print("RawNet3 initialised & weights loaded!")
+    print("RawNet3 đã được khởi tạo và tải trọng số!")
     if torch.cuda.is_available():
-        print("Cuda available, conducting inference on GPU")
+        print("Cuda khả dụng, thực hiện suy luận trên GPU")
         model = model.to("cuda")
         gpu = True
 
+    # Trích xuất embedding
     embedding = extract_speaker_embd(
         model,
         fn="test_data/id01_1.wav",
@@ -68,12 +99,18 @@ def main():
     )
 
     embedding_np = embedding.numpy()
-    # Tạo ma trận ngẫu nhiên (khóa)
-    np.random.seed(42)  # Trong thực tế, nên lưu trữ khóa này một cách an toàn
-    random_matrix = np.random.randn(embedding_np.shape[1], embedding_np.shape[1])
 
-    # Áp dụng BioHashing lên embedding
-    biohash = biohashing(embedding_np, random_matrix)
+    # Lượng tử hóa embedding thành mảng nhị phân
+    num_bits = 8  # Số bit lượng tử hóa
+    binary_array = quantize_embedding(embedding_np, num_bits=num_bits)
+
+    # Tạo ma trận ngẫu nhiên (khóa) nhỏ hơn
+    output_dim = 2048  # Kích thước mã băm mong muốn
+    np.random.seed(42)  # Trong thực tế, nên lưu trữ khóa này một cách an toàn
+    random_matrix = np.random.randn(len(binary_array), output_dim)
+
+    # Áp dụng BioHashing lên mảng nhị phân
+    biohash = biohashing(binary_array, random_matrix)
 
     # Lưu trữ biohash xuống file
     with open("stored_biohash.npy", "wb") as f:
@@ -83,35 +120,38 @@ def main():
     # Trích xuất embedding mới
     embedding2 = extract_speaker_embd(
         model,
-        fn="test_data/id01_2.wav",
+        # fn="test_data/id01_2.wav",
+        fn="test_data/00004_old.wav",
         n_samples=n_samples,
         n_segments=n_segments,
         gpu=gpu,
     )
     embedding2_np = embedding2.numpy()
 
-    # Áp dụng BioHashing lên embedding mới
-    biohash2 = biohashing(embedding2_np, random_matrix)
+    # Lượng tử hóa embedding mới thành mảng nhị phân
+    binary_array2 = quantize_embedding(embedding2_np, num_bits=num_bits)
+
+    # Áp dụng BioHashing lên mảng nhị phân mới
+    biohash2 = biohashing(binary_array2, random_matrix)
 
     # Tải biohash đã lưu trữ
     with open("stored_biohash.npy", "rb") as f:
         stored_biohash = np.load(f)
 
-    # So sánh hai mã băm
+    # Tính khoảng cách Hamming giữa hai biohash
     hamming_dist = np.sum(np.abs(stored_biohash - biohash2))
     total_bits = stored_biohash.size
     hamming_percentage = (hamming_dist / total_bits) * 100
-
     print(
-        f"Hamming distance between stored biohash and new biohash: {hamming_dist} {hamming_percentage}"
+        f"Khoảng cách Hamming giữa biohash lưu trữ và biohash mới: {hamming_percentage:.2f}% {hamming_dist} / {stored_biohash.size}"
     )
 
-    # Thiết lập ngưỡng để xác định người dùng
-    threshold = 10  # Ngưỡng tùy chọn
-    if hamming_dist <= threshold:
-        print("Authentication successful!")
+    # Thiết lập ngưỡng để xác định người dùng (ví dụ: 10% sai khác)
+    threshold_percentage = 10.0  # Ngưỡng tùy chọn
+    if hamming_percentage <= threshold_percentage:
+        print("Xác thực thành công!")
     else:
-        print("Authentication failed!")
+        print("Xác thực thất bại!")
 
 
 def extract_speaker_embd(
@@ -120,15 +160,15 @@ def extract_speaker_embd(
     audio, sample_rate = sf.read(fn)
     if len(audio.shape) > 1:
         raise ValueError(
-            f"RawNet3 supports mono input only. Input data has a shape of {audio.shape}."
+            f"RawNet3 chỉ hỗ trợ đầu vào mono. Dữ liệu đầu vào có shape {audio.shape}."
         )
 
     if sample_rate != 16000:
         raise ValueError(
-            f"RawNet3 supports 16k sampling rate only. Input data's sampling rate is {sample_rate}."
+            f"RawNet3 chỉ hỗ trợ tần số lấy mẫu 16k. Tần số của dữ liệu đầu vào là {sample_rate}."
         )
 
-    if len(audio) < n_samples:  # RawNet3 được huấn luyện với đoạn âm thanh 1 giây
+    if len(audio) < n_samples:
         shortage = n_samples - len(audio) + 1
         audio = np.pad(audio, (0, shortage), "wrap")
 

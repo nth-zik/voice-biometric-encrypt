@@ -23,6 +23,10 @@ print("torch.cuda.is_available()", torch.cuda.is_available())
 
 
 def main():
+    """
+    This function is the main entry point of the script.
+    """
+
     n_segments = 10
     n_samples = 16000
     model = RawNet3(
@@ -85,6 +89,7 @@ def main():
 
     embedding2_avg = np.mean(embedding2, axis=0)
 
+    # Query the LSH with the second embedding
     results = lsh.query(embedding2.flatten(), num_results=1, distance_func="hamming")
     # results = lsh.query(embedding2_avg, num_results=1, distance_func="euclidean")
     print("results", results)
@@ -96,20 +101,6 @@ def main():
         output = cos(embedding[i], embedding2[i])
         first_outputs.append(float(output))
     print(first_outputs)
-
-    # print("encrypt embedding")
-    # second_outputs = []
-    # cos = nn.CosineSimilarity(dim=0, eps=1e-6)
-    # for i in range(0, n_segments):
-    #     original_embedding_tensor = torch.tensor(
-    #         original_embedding_np[i], dtype=torch.float32
-    #     )
-    #     output = cos(original_embedding_tensor, embedding2[i])
-    #     second_outputs.append(float(output))
-    # print(second_outputs)
-    # print(np.array(second_outputs) / np.array(first_outputs))
-    # with open("embeddingraw_afteraes.txt", "w") as f:
-    #     f.write(str(original_embedding_np.tolist()))
 
 
 def extract_speaker_embd(
