@@ -91,6 +91,21 @@ def euclidean_distance(vec1, vec2):
     """Tính khoảng cách Euclidean giữa hai vector."""
     return np.linalg.norm(vec1 - vec2)
 
+def manhattan_distance_hex(hex1, hex2):
+    """Tính khoảng cách Manhattan giữa hai chuỗi hex."""
+    bin1 = bin(int(hex1, 16))[2:]
+    bin2 = bin(int(hex2, 16))[2:]
+    
+    # Đảm bảo độ dài bằng nhau bằng cách đệm thêm các số 0
+    bin1, bin2 = pad_hex_strings(bin1, bin2)
+    
+    # Tính khoảng cách Manhattan (L1 norm)
+    return sum(abs(int(c1) - int(c2)) for c1, c2 in zip(bin1, bin2))
+
+def manhattan_distance(vec1, vec2):
+    """Tính khoảng cách Manhattan (L1) giữa hai vector."""
+    return np.sum(np.abs(vec1 - vec2))
+
 def main():
     n_segments = 5
     n_samples = 16000
@@ -138,8 +153,8 @@ def main():
     
     embedding2 = extract_speaker_embd(
         model,
-        # fn='test_data/ts1_eSKwFJL.000000000.wav',
-        fn="test_data/id01_2.wav",
+        fn='test_data/ts1_eSKwFJL.000000000.wav',
+        # fn="test_data/id01_2.wav",
         n_samples=n_samples,
         n_segments=n_segments,
         gpu=gpu,
@@ -152,7 +167,7 @@ def main():
     hex1, hex2 = pad_hex_strings(hex1[2:], hex2[2:])  
     
     distance = hamming_distance(hex1[2:], hex2[2:])
-    print(f"Hamming Distance: {distance}/{len(hex1)}  {len(hex1)} {len(hex2)}")
+    print(f"Hamming Distance: {distance}/{len(hex1)*4}  {len(hex1)} {len(hex2)}")
     print(f"cosine similarity: {cosine_similarity_hex(hex1, hex2)}")
     # Euclidean raw
     euclidean_distances = []
@@ -162,15 +177,23 @@ def main():
     
     print(f"Khoảng cách Euclidean giữa hai embedding gốc: {euclidean_distances}")
     
+    manhattan_distances = []
+    for i in range(n_segments):
+        dist = manhattan_distance(embedding[i].cpu().numpy(), embedding2[i].cpu().numpy())
+        manhattan_distances.append(dist)
+    
+    print(f"Khoảng cách Manhattan giữa hai embedding gốc: {manhattan_distances}")
+    
     print(f"Euclidean : {euclidean_distance_hex(hex1, hex2)}")
+    print(f"manhattan_distance_hex : {manhattan_distance_hex(hex1, hex2)}")
     # So sánh gốc
     print("Original embedding")
     cos = nn.CosineSimilarity(dim=0, eps=1e-6)
-    first_outputs = []
-    for i in range(0, n_segments):
-        output = cos(embedding[i], embedding2[i])
-        first_outputs.append(float(output))
-    print(first_outputs)
+    # first_outputs = []
+    # for i in range(0, n_segments):
+    #     output = cos(embedding.ravel(), embedding2.ravel())
+    #     first_outputs.append(float(output))
+    print(cos(embedding.ravel(), embedding2.ravel()))
 
 
 
