@@ -9,6 +9,7 @@ declare module "@remix-run/node" {
 }
 
 export default defineConfig({
+  assetsInclude: ["**/*.webm", "**/*.wav"],
   plugins: [
     remix({
       future: {
@@ -21,4 +22,5 @@ export default defineConfig({
     }),
     tsconfigPaths(),
   ],
+  legacy: { proxySsrExternalModules: true },
 });

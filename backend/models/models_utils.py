@@ -35,17 +35,18 @@ def float_to_gray_with_sign(value, decimal_keep):
     sign_bit = "0" if value >= 0 else "1"  # 0 cho dương, 1 cho âm
     exponent = int(math.log10(decimal_keep))
 
-    abs_value = abs(round(value, exponent)) * decimal_keep  # Nhân với hằng số để loại bỏ phần thập phân
+    abs_value = (
+        abs(round(value, exponent)) * decimal_keep
+    )  # Nhân với hằng số để loại bỏ phần thập phân
     int_value = int(abs_value)  # Chuyển thành số nguyên
     gray_value = graycode.tc_to_gray_code(int_value)  # Chuyển thành Gray code
     value_63bit = "{:0511b}".format(gray_value)  # Chuỗi nhị phân 63 bit
     return sign_bit + value_63bit  # 1 bit dấu + 63 bit giá trị Gray code
 
+
 def embedding_to_gray_with_sign(embedding_np, decimal_keep):
     """Chuyển đổi toàn bộ embedding thành chuỗi Gray code với 63 bit giá trị và 1 bit dấu."""
     return "".join(float_to_gray_with_sign(x, decimal_keep) for x in embedding_np)
-
-
 
 
 def hamming_distance(hex1, hex2):
@@ -61,6 +62,7 @@ def hamming_distance(hex1, hex2):
     # Tính khoảng cách Hamming
     return sum(c1 != c2 for c1, c2 in zip(bin1, bin2))
 
+
 def jaccard_similarity(hex1, hex2):
     """Tính độ tương đồng Jaccard giữa hai chuỗi hexadecimal."""
     bin1 = bin(int(hex1, 16))[2:]
@@ -72,13 +74,16 @@ def jaccard_similarity(hex1, hex2):
     bin2 = bin2.zfill(max_len)
 
     # Tính toán độ tương đồng Jaccard
-    intersection = sum(c1 == c2 == '1' for c1, c2 in zip(bin1, bin2))  # Số bit 1 chung
-    union = sum(c1 == '1' or c2 == '1' for c1, c2 in zip(bin1, bin2))  # Tổng số bit 1 (bit giống hoặc khác)
+    intersection = sum(c1 == c2 == "1" for c1, c2 in zip(bin1, bin2))  # Số bit 1 chung
+    union = sum(
+        c1 == "1" or c2 == "1" for c1, c2 in zip(bin1, bin2)
+    )  # Tổng số bit 1 (bit giống hoặc khác)
 
     if union == 0:  # Trường hợp tránh chia cho 0
         return 0.0
     else:
         return intersection / union
+
 
 def read_trial_list(trial_file):
     trials = []
@@ -96,6 +101,7 @@ def read_trial_list(trial_file):
 def extract_speaker_embd(
     model, fn: str, n_samples: int, n_segments: int = 10, gpu: bool = False
 ) -> torch.Tensor:
+    print("fn", fn)
     audio, sample_rate = sf.read(fn)
     if len(audio.shape) > 1:
         audio = audio[:, 0]  # Chỉ lấy kênh đầu tiên
@@ -148,6 +154,9 @@ def load_embeddings(filename):
         return embeddings
     else:
         return {}
+
+
+eer_threshold = None
 
 
 def main():
@@ -220,7 +229,7 @@ def main():
 
         # Lưu embeddings sau mỗi lần thêm mới
         save_embeddings(embeddings, embeddings_file)
-    with open('all_embeddings.txt', 'w') as f:
+    with open("all_embeddings.txt", "w") as f:
         for file_path, embedding_np in embeddings.items():
             f.write(f"{file_path}\t{','.join(map(str, embedding_np))}\n")
 
@@ -245,6 +254,7 @@ def main():
 
     if len(scores_cosine) > 0:
         eer_cosine = compute_eer(labels_cosine, scores_cosine)
+        eer_threshold = eer_cosine
         print(f"EER based on Cosine Similarity: {eer_cosine * 100:.2f}%")
     else:
         print("No scores to compute EER based on Cosine Similarity.")
@@ -253,8 +263,8 @@ def main():
     eer_results = []
 
     # Vòng lặp qua các giá trị DECIMAL_KEEP từ 10^8 đến 10^15
-    for exponent in range(1, 8):  # Từ 8 đến 15
-        decimal_keep = 10 ** exponent
+    for exponent in range(1, 2):  # Từ 8 đến 15
+        decimal_keep = 10**exponent
         print(f"\nProcessing with DECIMAL_KEEP = 10^{exponent}")
 
         # Tên file lưu trữ hex embeddings cho DECIMAL_KEEP hiện tại
@@ -294,23 +304,24 @@ def main():
                 # score = -distance  # Đảo dấu để phù hợp với EER (giá trị cao -> giống nhau)
                 # scores.append(score)
                 # labels.append(label)
-                
+
                 similarity = jaccard_similarity(hex1, hex2)
                 scores.append(similarity)
                 labels.append(label)
             else:
-                print(f"Missing hex embeddings for {path1} or {path2}, skipping this pair.")
+                print(
+                    f"Missing hex embeddings for {path1} or {path2}, skipping this pair."
+                )
 
         # Tính EER
         if len(scores) > 0:
             with open("label_scores.txt", "w") as f:
-                json.dump({
-                    "labels": labels,
-                    "scores": scores
-                }, f)
+                json.dump({"labels": labels, "scores": scores}, f)
             eer = compute_eer(labels, scores)
-            print(f"EER based on Hamming Distance with DECIMAL_KEEP=10^{exponent}: {eer * 100:.2f}%")
-            eer_results.append({'DECIMAL_KEEP': exponent, 'EER_Hamming': eer * 100})
+            print(
+                f"EER based on Hamming Distance with DECIMAL_KEEP=10^{exponent}: {eer * 100:.2f}%"
+            )
+            eer_results.append({"DECIMAL_KEEP": exponent, "EER_Hamming": eer * 100})
         else:
             print(f"No scores to compute EER for DECIMAL_KEEP=10^{exponent}.")
 
@@ -318,7 +329,6 @@ def main():
     df = pd.DataFrame(eer_results)
     print("\nKết quả EER cho các giá trị DECIMAL_KEEP:")
     print(df)
-
 
 
 if __name__ == "__main__":

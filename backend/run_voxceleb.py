@@ -35,15 +35,19 @@ def float_to_gray_with_sign(value, decimal_keep):
     sign_bit = "0" if value >= 0 else "1"  # 0 cho dương, 1 cho âm
     exponent = int(math.log10(decimal_keep))
 
-    abs_value = abs(round(value, exponent)) * decimal_keep  # Nhân với hằng số để loại bỏ phần thập phân
+    abs_value = (
+        abs(round(value, exponent)) * decimal_keep
+    )  # Nhân với hằng số để loại bỏ phần thập phân
     int_value = int(abs_value)  # Chuyển thành số nguyên
     gray_value = graycode.tc_to_gray_code(int_value)  # Chuyển thành Gray code
     value_63bit = "{:063b}".format(gray_value)  # Chuỗi nhị phân 63 bit
     return sign_bit + value_63bit  # 1 bit dấu + 63 bit giá trị Gray code
 
+
 def embedding_to_gray_with_sign(embedding_np, decimal_keep):
     """Chuyển đổi toàn bộ embedding thành chuỗi Gray code với 63 bit giá trị và 1 bit dấu."""
     return "".join(float_to_gray_with_sign(x, decimal_keep) for x in embedding_np)
+
 
 def quantize_embedding(embedding_np, num_levels=256):
     """Lượng tử hóa embedding thành các mức rời rạc."""
@@ -210,7 +214,7 @@ def main():
 
         # Lưu embeddings sau mỗi lần thêm mới
         save_embeddings(embeddings, embeddings_file)
-    with open('all_embeddings.txt', 'w') as f:
+    with open("all_embeddings.txt", "w") as f:
         for file_path, embedding_np in embeddings.items():
             f.write(f"{file_path}\t{','.join(map(str, embedding_np))}\n")
 
@@ -244,11 +248,11 @@ def main():
 
     # Vòng lặp qua các giá trị DECIMAL_KEEP từ 10^8 đến 10^15
     for exponent in range(1, 8):  # Từ 8 đến 15
-        decimal_keep = 10 ** exponent
+        decimal_keep = 10**exponent
         print(f"\nProcessing with DECIMAL_KEEP = 10^{exponent}")
 
         # Tên file lưu trữ hex embeddings cho DECIMAL_KEEP hiện tại
-        hex_embeddings_file = f"./hex_embeddings_quantized_round_{exponent}.json"
+        hex_embeddings_file = f"./hex_embeddings/hex_embeddings_hamming_{exponent}.json"
 
         # Tải hex embeddings đã lưu nếu có
         hex_embeddings = load_hex_embeddings(hex_embeddings_file)
@@ -281,22 +285,25 @@ def main():
                 # Tính khoảng cách Hamming
                 distance = hamming_distance(hex1, hex2)
                 # Chuyển đổi khoảng cách Hamming thành điểm số (càng cao càng giống nhau)
-                score = -distance  # Đảo dấu để phù hợp với EER (giá trị cao -> giống nhau)
+                score = (
+                    -distance
+                )  # Đảo dấu để phù hợp với EER (giá trị cao -> giống nhau)
                 scores.append(score)
                 labels.append(label)
             else:
-                print(f"Missing hex embeddings for {path1} or {path2}, skipping this pair.")
+                print(
+                    f"Missing hex embeddings for {path1} or {path2}, skipping this pair."
+                )
 
         # Tính EER
         if len(scores) > 0:
             with open("label_scores.txt", "w") as f:
-                json.dump({
-                    "labels": labels,
-                    "scores": scores
-                }, f)
+                json.dump({"labels": labels, "scores": scores}, f)
             eer = compute_eer(labels, scores)
-            print(f"EER based on Hamming Distance with DECIMAL_KEEP=10^{exponent}: {eer * 100:.2f}%")
-            eer_results.append({'DECIMAL_KEEP': exponent, 'EER_Hamming': eer * 100})
+            print(
+                f"EER based on Hamming Distance with DECIMAL_KEEP=10^{exponent}: {eer * 100:.2f}%"
+            )
+            eer_results.append({"DECIMAL_KEEP": exponent, "EER_Hamming": eer * 100})
         else:
             print(f"No scores to compute EER for DECIMAL_KEEP=10^{exponent}.")
 
@@ -304,7 +311,6 @@ def main():
     df = pd.DataFrame(eer_results)
     print("\nKết quả EER cho các giá trị DECIMAL_KEEP:")
     print(df)
-
 
 
 if __name__ == "__main__":
