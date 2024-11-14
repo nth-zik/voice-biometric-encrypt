@@ -98,6 +98,20 @@ def read_trial_list(trial_file):
     return trials
 
 
+def binary_to_hex(binary_string):
+    # Kiểm tra độ dài chuỗi và thêm 0 vào đầu nếu không chia hết cho 4
+    if len(binary_string) % 4 != 0:
+        binary_string = binary_string.zfill(
+            len(binary_string) + (4 - len(binary_string) % 4)
+        )
+
+    # Chuyển đổi từng nhóm 4 bit thành mã hexadecimal
+    hex_string = hex(int(binary_string, 2))[
+        2:
+    ]  # [2:] để loại bỏ '0x' ở đầu chuỗi hexadecimal
+    return hex_string.upper()  # Trả về chuỗi viết hoa nếu cần
+
+
 def extract_speaker_embd(
     model, fn: str, n_samples: int, n_segments: int = 10, gpu: bool = False
 ) -> torch.Tensor:
@@ -263,7 +277,9 @@ def main():
         print(f"\nProcessing with DECIMAL_KEEP = 10^{exponent}")
 
         # Tên file lưu trữ hex embeddings cho DECIMAL_KEEP hiện tại
-        hex_embeddings_file = f"./hex_embeddings/hex_embeddings_jaccard_{exponent}.json"
+        hex_embeddings_file = (
+            f"./hex_embeddings/hex_embeddings_jaccard_new_{exponent}.json"
+        )
 
         # Tải hex embeddings đã lưu nếu có
         hex_embeddings = load_hex_embeddings(hex_embeddings_file)
@@ -279,7 +295,7 @@ def main():
             binary_representation = embedding_to_gray_with_sign(
                 embedding_np.ravel(), decimal_keep
             )
-            hex_representation = hex(eval("0b" + binary_representation))
+            hex_representation = binary_to_hex(binary_representation)
             hex_embeddings[file_path] = hex_representation
 
             # Lưu hex_embeddings sau mỗi lần thêm mới
