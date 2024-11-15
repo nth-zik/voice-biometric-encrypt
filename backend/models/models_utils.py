@@ -30,7 +30,7 @@ def load_hex_embeddings(filename):
         return {}
 
 
-def float_to_gray_with_sign(value, decimal_keep):
+def float_to_gray_with_sign(value, decimal_keep, num_bits=32):
     """Chuyển đổi float thành Gray code với 1 bit dấu và 63 bit giá trị."""
     sign_bit = "0" if value >= 0 else "1"  # 0 cho dương, 1 cho âm
     exponent = int(math.log10(decimal_keep))
@@ -40,7 +40,7 @@ def float_to_gray_with_sign(value, decimal_keep):
     )  # Nhân với hằng số để loại bỏ phần thập phân
     int_value = int(abs_value)  # Chuyển thành số nguyên
     gray_value = graycode.tc_to_gray_code(int_value)  # Chuyển thành Gray code
-    value_63bit = "{:0511b}".format(gray_value)  # Chuỗi nhị phân 63 bit
+    value_63bit = f"{gray_value:b}".zfill(num_bits)[:num_bits]
     return sign_bit + value_63bit  # 1 bit dấu + 63 bit giá trị Gray code
 
 
