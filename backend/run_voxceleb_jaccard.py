@@ -16,16 +16,28 @@ from models.RawNetBasicBlock import Bottle2neck
 DECIMAL_KEEP = 10**8  # Hằng số để loại bỏ phần thập phân
 
 
-def save_hex_embeddings(hex_embeddings, filename):
-    with open(filename, "w") as f:
-        json.dump(hex_embeddings, f)
+def save_hex_embeddings(key, value, filename):
+    # with open(filename, "w") as f:
+    #     json.dump(hex_embeddings, f)
+    with open(filename, "a") as f:
+        value_str = ",".join(map(str, value))  # Chuyển numpy array thành chuỗi
+        f.write(f"{key}\t{value_str}\n")  # Mỗi dòng chứa key và giá trị
 
 
 def load_hex_embeddings(filename):
+    # if os.path.exists(filename):
+    #     with open(filename, "r") as f:
+    #         hex_embeddings = json.load(f)
+    #     return hex_embeddings
+    # else:
+    #     return {}
     if os.path.exists(filename):
+        embeddings = {}
         with open(filename, "r") as f:
-            hex_embeddings = json.load(f)
-        return hex_embeddings
+            for line in f:
+                key, value_str = line.strip().split("\t")
+                embeddings[key] = np.array(list(map(float, value_str.split(","))))
+            return embeddings
     else:
         return {}
 
@@ -155,16 +167,22 @@ def compute_eer(labels, scores):
     return eer, eer_threshold
 
 
-def save_embeddings(embeddings, filename):
+def save_embeddings(key, value, filename):
     # embeddings là dictionary với key là file_path và value là numpy array
-    np.savez_compressed(filename, **embeddings)
+    # np.savez(filename, **embeddings)
+    with open(filename, "a") as f:
+        value_str = ",".join(map(str, value))  # Chuyển numpy array thành chuỗi
+        f.write(f"{key}\t{value_str}\n")  # Mỗi dòng chứa key và giá trị
 
 
 def load_embeddings(filename):
     if os.path.exists(filename):
-        data = np.load(filename)
-        embeddings = {file_path: data[file_path] for file_path in data.files}
-        return embeddings
+        embeddings = {}
+        with open(filename, "r") as f:
+            for line in f:
+                key, value_str = line.strip().split("\t")
+                embeddings[key] = np.array(list(map(float, value_str.split(","))))
+            return embeddings
     else:
         return {}
 
@@ -221,12 +239,13 @@ def main():
 
     # Tải embeddings đã lưu nếu có
     embeddings = load_embeddings(embeddings_file)
-
     # Trích xuất embedding cho các tệp chưa có embeddings
     for file_path in tqdm(file_list):
         if file_path in embeddings:
             continue  # Đã có embedding, bỏ qua
         full_path = os.path.join(data_dir, file_path)
+        if not os.path.isfile(full_path):
+            continue
         embedding = extract_speaker_embd(
             model,
             fn=full_path,
@@ -238,7 +257,7 @@ def main():
         embeddings[file_path] = embedding_np  # Lưu embedding gốc
 
         # Lưu embeddings sau mỗi lần thêm mới
-        save_embeddings(embeddings, embeddings_file)
+        save_embeddings(file_path, embedding_np, embeddings_file)
     with open("all_embeddings.txt", "w") as f:
         for file_path, embedding_np in embeddings.items():
             f.write(f"{file_path}\t{','.join(map(str, embedding_np))}\n")
@@ -288,6 +307,8 @@ def main():
         for file_path in tqdm(file_list):
             if file_path in hex_embeddings:
                 continue  # Đã có hex embedding, bỏ qua
+            if file_path not in embeddings:
+                continue
             embedding_np = embeddings[file_path]
 
             # Sử dụng lượng tử hóa và nhị phân hóa
@@ -299,7 +320,7 @@ def main():
             hex_embeddings[file_path] = hex_representation
 
             # Lưu hex_embeddings sau mỗi lần thêm mới
-            save_hex_embeddings(hex_embeddings, hex_embeddings_file)
+            save_hex_embeddings(file_path, hex_representation, hex_embeddings_file)
 
         # Tính toán khoảng cách Hamming và EER
         scores = []
