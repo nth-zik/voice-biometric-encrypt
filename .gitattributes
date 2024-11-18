@@ -5603,3 +5603,5 @@ test_data/wav/id10295/WxDEVkQKPow/00001.wav filter=lfs diff=lfs merge=lfs -text
 test_data/wav/id10297/31XtFWtF7Sc/00006.wav filter=lfs diff=lfs merge=lfs -text
 test_data/wav/id10302/VRCidrXwd1s/00023.wav filter=lfs diff=lfs merge=lfs -text
 test_data/wav/id10308/rgpPBT4yQcg/00014.wav filter=lfs diff=lfs merge=lfs -text
+backend/all_embeddings_list_test_hard_fromtrain.txt filter=lfs diff=lfs merge=lfs -text
+backend/embeddings_list_test_hard_fromtrain.txt filter=lfs diff=lfs merge=lfs -text
