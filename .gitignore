@@ -1,5 +1,5 @@
 venv
 .venv
 __pycache__
-backend/hex_embeddings/*
+# backend/hex_embeddings/*
 backend/test_data/voxceleb_train/**/*
